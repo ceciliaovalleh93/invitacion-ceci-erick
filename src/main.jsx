@@ -70,7 +70,42 @@ function App(){
   const configured = !!supabase;
  useEffect(()=>{ if(!supabase) return; supabase.auth.getSession().then(({data})=>setSession(data.session)); const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s)); return ()=>subscription.unsubscribe(); },[]);
  const lookup = async (e)=>{e?.preventDefault(); if(!supabase){setMessage('Primero configura Supabase siguiendo el archivo LEEME.md.');return;} setLoading(true);setMessage('');setGuest(null);try{const {data,error}=await supabase.rpc('find_guest_by_code',{p_code:code.trim()});if(error)throw error;if(!data?.length){setMessage('No encontramos ese código. Revisa el código de tu invitación o contacta a los novios.');}else{setGuest(data[0]);setResponse(data[0].status==='confirmed'?'yes':data[0].status==='declined'?'no':'');setAttendingAdults(String(data[0].attending_adults ?? data[0].attending_count ?? data[0].max_seats));setAttendingChildren(String(data[0].attending_children ?? 0));}}catch(err){setMessage(err.message || 'No se pudo consultar la invitación.');}finally{setLoading(false)}};
- const submit = async (e)=>{e.preventDefault();if(!supabase||!guest)return;setLoading(true);setMessage('');try{const count=response==='yes'?Number(attendees):0;const {data,error}=await supabase.rpc('submit_rsvp',{p_code:code.trim(),p_attending:response==='yes',p_count:count});if(error)throw error;setMessage(data?.message || '¡Tu respuesta quedó registrada! Gracias.');setGuest({...guest,status:response==='yes'?'confirmed':'declined',attending_count:count,attending_adults:adults,attending_children:children});}catch(err){setMessage(err.message || 'No se pudo guardar tu respuesta.');}finally{setLoading(false)}};
+const submit = async (e) => {
+  e.preventDefault();
+  if (!supabase || !guest) return;
+
+  setLoading(true);
+  setMessage('');
+
+  try {
+    const adults = response === 'yes' ? Number(attendingAdults) : 0;
+    const children = response === 'yes' ? Number(attendingChildren) : 0;
+    const count = adults + children;
+
+    const { data, error } = await supabase.rpc('submit_rsvp', {
+      p_code: code.trim(),
+      p_attending: response === 'yes',
+     p_adults: adults,
+p_children: children
+    });
+
+    if (error) throw error;
+
+    setMessage(data?.message || '¡Tu respuesta quedó registrada! Gracias.');
+
+    setGuest({
+      ...guest,
+      status: response === 'yes' ? 'confirmed' : 'declined',
+      attending_count: count,
+      attending_adults: adults,
+      attending_children: children
+    });
+  } catch (err) {
+    setMessage(err.message || 'No se pudo guardar tu respuesta.');
+  } finally {
+    setLoading(false);
+  }
+};
  const login = async(e)=>{e.preventDefault();if(!supabase)return;setLoading(true);const fd=new FormData(e.currentTarget);const {error}=await supabase.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});setMessage(error?.message || '');setLoading(false)};
  const loadGuests=async()=>{if(!supabase||!session)return;const {data,error}=await supabase.from('guests').select('*').order('family_name');if(error)setMessage(error.message);else setGuests(data||[])};
  const addGuest=async(e)=>{e.preventDefault();if(!supabase||!session)return;setLoading(true);setMessage('');try{const {error}=await supabase.from('guests').insert([{family_name:familyName.trim(),guest_names:guestNames.trim(),max_seats:Number(adultSeats)+Number(childSeats),children_count:Number(childSeats),phone:guestPhone.trim(),status:'pending'}]);if(error)throw error;setFamilyName('');setGuestNames('');setGuestPhone('');setAdultSeats('1');setChildSeats('0');setMessage('Familia agregada correctamente.');await loadGuests()}catch(err){setMessage(err.message||'No se pudo agregar la familia.')}finally{setLoading(false)}};
